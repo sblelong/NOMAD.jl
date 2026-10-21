@@ -11,6 +11,7 @@ const BBInputTypes = ["R" # Real
 const BBOutputTypes = ["OBJ" # objective type
                        "EB"  # extreme barrier constraint
                        "PB"  # progressive barrier constraint
+                       "EQPB" # equality constraint
                       ]
 
 const BBLinearConverterTypes = ["QR" # QR Linear converter
@@ -140,6 +141,9 @@ mutable struct NomadOptions
     linear_converter::String
     linear_constraints_atol::Float64
 
+    # Use the MADS mixed penalty strategy
+    madspip_optimization::Bool
+
     seed::Union{Int, Nothing}
     function NomadOptions(;
                           cache_size_max::Int = typemax(Int64),
@@ -186,6 +190,7 @@ mutable struct NomadOptions
                           max_time::Union{Nothing, Int}=nothing,
                           linear_converter::String="SVD",
                           linear_constraints_atol::Float64=0.0,
+                          madspip_optimization::Bool=false,
                           seed=nothing)
         return new(cache_size_max,
                    display_degree,
@@ -231,6 +236,7 @@ mutable struct NomadOptions
                    max_time,
                    linear_converter,
                    linear_constraints_atol,
+                   madspip_optimization,
                    seed)
     end
 end
@@ -743,6 +749,13 @@ constraints, i.e. A * x0 = b.
 
 `0` by default.
 
+-> `madspip_optimization::Bool`:
+
+Use the Mixed Penalty Logarithmic Barrier approach (MadsPIP) to handle constraints.
+Only works with `PB` and `EQPB` constraint types.
+
+`false` by default.
+
 """
 struct NomadProblem
 
@@ -850,6 +863,11 @@ function check_problem(p::NomadProblem)
             p.granularity[i] == 0 || error("NOMAD.jl error: wrong parameters, $(i)th coordinate of granularity must be set to 0 when solving a linear constrained blackbox optimization problem")
             p.min_mesh_size[i] == 0 || error("NOMAD.jl error: wrong parameters, $(i)th coordinate of min_mesh_size must be set to 0 when solving a linear constrained blackbox problem")
         end
+    end
+
+    if p.options.madspip_optimization
+        all(elt -> elt in ["OBJ", "PB", "EQPB"], p.output_types) || 
+        error("NOMAD.jl error: madspip_optimization only supports PB and EQPB constraint types")
     end
 
     @assert all(elt -> elt in BBOutputTypes, p.output_types) "NOMAD.jl error: wrong parameters, at least one output is not a BBOutputType"
@@ -1102,6 +1120,8 @@ function solve(p::NomadProblem, x0::Vector{Float64})
 
         add_nomad_bool_param!(c_nomad_problem, "STOP_IF_FEASIBLE", p.options.stop_if_feasible)
         add_nomad_bool_param!(c_nomad_problem, "STOP_IF_PHASE_ONE_SOLUTION", p.options.stop_if_phase_one_solution)
+
+        add_nomad_bool_param!(c_nomad_problem, "MADSPIP_OPTIMIZATION", p.options.madspip_optimization)
 
         # 4- solve problem
         stats = if p.A === nothing
