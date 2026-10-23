@@ -1,6 +1,6 @@
 @testset "Example: MADS-PIP" begin
     function bb(x)
-        f = f = x[1]^2 + x[2]^2
+        f = x[1]^2 + x[2]^2
         c = x[1] + x[2] - 1.0
         return (true, true, [f ; c])
     end
