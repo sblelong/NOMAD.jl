@@ -983,6 +983,12 @@ function solve(p::NomadProblem, x0::Vector{Float64})
                 print("Computing variable bounds for the reduced problem ...")
                 lower_bound = get_lower_bound(converter, p.lower_bound, p.upper_bound)
                 upper_bound = get_upper_bound(converter, p.lower_bound, p.upper_bound)
+                # The LP solver computes these bounds up to its tolerance only: when x0 lies on or near a bound,
+                # the reduced starting point can fall slightly outside them. Widen them so that they contain it,
+                # which is safe since x0 is feasible and points outside the original bounds are not evaluated.
+                z0 = convert_to_z(converter, x0)
+                lower_bound = min.(lower_bound, z0)
+                upper_bound = max.(upper_bound, z0)
                 println("Done")
 
                 # x0 satisfies the equality constraints and the bounds constraints
